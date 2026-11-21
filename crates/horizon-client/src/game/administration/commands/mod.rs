@@ -3933,6 +3933,27 @@ impl Game<'_> {
                 }
                 Text::translate("chat.type.announcement", &[name, message])
             }
+            "me" if self.lan.is_some() && self.command_source.is_some_and(|s| s.entity.is_none()) => {
+                // EmoteCommands from a source that is no player (the console, a command block):
+                // every player gets it, an unsigned announcement like `say`'s, and the log keeps it.
+                let line = Text::translate("chat.type.emote", &[name.clone(), message.clone()]);
+                if let Some(host) = &self.lan {
+                    use horizon_client::lan::data::component_nbt;
+                    host.hub.broadcast_source_chat(
+                        "emote_command",
+                        component_nbt(&name.component()),
+                        component_nbt(&message.component()),
+                        None,
+                    );
+                }
+                if self.is_dedicated_server() {
+                    self.lan_log_event(horizon_client::lan::hub::HostEvent::Chat {
+                        line: line.plain(),
+                        secure: false,
+                    });
+                }
+                return Ok(1);
+            }
             "me" => Text::translate("chat.type.emote", &[name, message]),
             _ => {
                 let targets = self.entities(ctx, "targets", true)?;
