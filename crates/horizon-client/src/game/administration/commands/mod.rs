@@ -3935,7 +3935,10 @@ impl Game<'_> {
             }
             "me" => Text::translate("chat.type.emote", &[name, message]),
             _ => {
-                let _ = self.entities(ctx, "targets", true)?;
+                let targets = self.entities(ctx, "targets", true)?;
+                if self.command_source.is_some_and(|s| s.entity.is_none()) {
+                    return Ok(self.whisper_from_source(&targets, &name, &message));
+                }
                 // Whispering to yourself: the incoming and outgoing lines.
                 let out = Text::translate(
                     "commands.message.display.outgoing",
@@ -3986,6 +3989,43 @@ impl Game<'_> {
             focused,
         );
         Ok(1)
+    }
+    /// `MsgCommand.sendMessage` from a source that is no player (the console, a command block): the
+    /// source is told the outgoing line of each target, and each player of the server gets the incoming
+    /// one. The count of targets is the command's result.
+    fn whisper_from_source(&mut self, targets: &[Target], name: &Text, message: &Text) -> i32 {
+        for &t in targets {
+            let outgoing = Text::translate(
+                "commands.message.display.outgoing",
+                &[self.target_name(t), message.clone()],
+            )
+            .with_color(text::GRAY)
+            .italic();
+            self.feedback_unbroadcast(outgoing);
+        }
+        let connections: Vec<u32> = targets
+            .iter()
+            .filter_map(|t| match t {
+                Target::Guest(conn) => Some(*conn),
+                _ => None,
+            })
+            .collect();
+        if let Some(host) = &self.lan {
+            let guests: Vec<usize> = host
+                .hub
+                .guests
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| connections.contains(&g.conn))
+                .map(|(k, _)| k)
+                .collect();
+            host.hub.whisper_from_source(
+                &guests,
+                horizon_client::lan::data::component_nbt(&name.component()),
+                &message.plain(),
+            );
+        }
+        targets.len() as i32
     }
     /// MessageArgument: `@p`-style selectors in a message become names.
     pub(in crate::game) fn expand_selectors(&mut self, raw: &str) -> Text {
