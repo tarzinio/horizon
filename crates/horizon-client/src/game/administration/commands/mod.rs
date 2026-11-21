@@ -3988,7 +3988,7 @@ impl Game<'_> {
         Ok(1)
     }
     /// MessageArgument: `@p`-style selectors in a message become names.
-    pub(super) fn expand_selectors(&mut self, raw: &str) -> Text {
+    pub(in crate::game) fn expand_selectors(&mut self, raw: &str) -> Text {
         let mut out = Text::empty();
         let mut rest = raw;
         while let Some(at) = rest.find('@') {
