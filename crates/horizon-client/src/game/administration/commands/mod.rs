@@ -3775,6 +3775,12 @@ impl Game<'_> {
         let Some(Arg::Resource(s)) = ctx.get("structure").cloned() else {
             return Ok(0);
         };
+        if !self.structure_exists(&s) {
+            return Err(CommandError::new(Text::tr(
+                "commands.locate.structure.invalid",
+                &[&s],
+            )));
+        }
         let names = self.structure_names(&s);
         let from = origin.map(|v| v.floor() as i32);
         let found = self.end.locator().and_then(|t| t.locate(&names, from, 100));
@@ -3801,6 +3807,33 @@ impl Game<'_> {
             ],
         ));
         Ok(distance)
+    }
+    /// `LocateCommand.getHolders`: an id the structure registry lacks, or a
+    /// tag no source defines, is no structure at all.
+    fn structure_exists(&self, structure: &str) -> bool {
+        match structure.strip_prefix('#') {
+            Some(tag) => self.tag_exists("worldgen/structure", tag),
+            None => self
+                .ui
+                .registries
+                .by_registry
+                .get("minecraft:worldgen/structure")
+                .is_some_and(|registry| registry.ids.iter().any(|id| id == structure)),
+        }
+    }
+    /// Whether the game's files or a world pack define the tag of `registry`.
+    fn tag_exists(&self, registry: &str, tag: &str) -> bool {
+        let (ns, path) = tag.split_once(':').unwrap_or(("minecraft", tag));
+        self.options
+            .resources
+            .join(format!("data/{ns}/tags/{registry}/{path}.json"))
+            .is_file()
+            || self
+                .fns
+                .store
+                .files
+                .get(&format!("tags/{ns}:{registry}/{path}"))
+                .is_some_and(|files| !files.is_empty())
     }
     /// The structures `LocateCommand.locateStructure` searches for: an id, or
     /// a `#tag`'s members.
