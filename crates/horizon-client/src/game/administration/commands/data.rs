@@ -444,6 +444,20 @@ impl Game<'_> {
         // passengers the load kept raw (none, when it kept none).
         if let Tag::Compound(c) = &mut tag {
             c.remove(&"Passengers".into());
+            // Tags is a list of strings and CustomName a text: a value of another
+            // type fails to decode and the field is dropped.
+            let bad_tags = c.get(&"Tags".into()).is_some_and(|t| {
+                !matches!(t, Tag::List(l) if l.iter().all(|e| matches!(e, Tag::String(_))))
+            });
+            if bad_tags {
+                c.remove(&"Tags".into());
+            }
+            let bad_name = c.get(&"CustomName".into()).is_some_and(|t| {
+                !matches!(t, Tag::String(_) | Tag::Compound(_) | Tag::List(_))
+            });
+            if bad_name {
+                c.remove(&"CustomName".into());
+            }
         }
         match t {
             // EntityDataAccessor.setData: players can't be modified, guests neither.
