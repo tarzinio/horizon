@@ -2209,8 +2209,12 @@ impl ArmorStand {
         // `brokenByAnything` receives as the `DamageSource`.
         (self.health <= 0.5).then(|| hit_by.unwrap_or("minecraft:generic"))
     }
-    /// EntityType.ARMOR_STAND dimensions (0.5 x 1.975F, half for small).
+    /// EntityType.ARMOR_STAND dimensions (0.5 x 1.975F, half for small); a marker's are empty
+    /// (`ArmorStand.MARKER_DIMENSIONS`), its box a point.
     pub fn bounds(&self) -> Aabb {
+        if self.marker {
+            return Aabb::new(self.position, self.position);
+        }
         let s = if self.small { 0.5 } else { 1.0 };
         // EntityDimensions.makeBoundingBox adds the float height, widened
         // (halving it for the small stand is exact).
