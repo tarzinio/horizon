@@ -74,4 +74,21 @@ fn a_number_stored_into_tags_or_custom_name_is_dropped() {
         "execute store result entity @e[type=marker,limit=1] CustomName int 1 run say hi"
     ));
     assert_eq!(found(&mut game, "CustomName"), 0);
+
+    // The elements that are still strings stay: ["a","b"] with a number in the
+    // first slot ends as ["b"].
+    assert!(game.run_command("kill @e[type=marker]"));
+    assert!(game.run_command("summon marker 8.5 80 8.5 {Tags:[\"a\",\"b\"]}"));
+    assert!(game.run_command(
+        "execute store result entity @e[type=marker,limit=1] Tags[0] int 1 run say hi"
+    ));
+    assert_eq!(found(&mut game, "Tags[1]"), 0);
+    game.run_command(
+        "execute store success score #r t if data entity @e[type=marker,limit=1] {Tags:[\"b\"]}",
+    );
+    assert_eq!(game.score.board.score("#r", "t").unwrap().value, 1);
+    game.run_command(
+        "execute store success score #r t if data entity @e[type=marker,limit=1] {Tags:[\"a\"]}",
+    );
+    assert_eq!(game.score.board.score("#r", "t").unwrap().value, 0);
 }

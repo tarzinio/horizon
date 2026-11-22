@@ -444,13 +444,24 @@ impl Game<'_> {
         // passengers the load kept raw (none, when it kept none).
         if let Tag::Compound(c) = &mut tag {
             c.remove(&"Passengers".into());
-            // Tags is a list of strings and CustomName a text: a value of another
-            // type fails to decode and the field is dropped.
-            let bad_tags = c.get(&"Tags".into()).is_some_and(|t| {
-                !matches!(t, Tag::List(l) if l.iter().all(|e| matches!(e, Tag::String(_))))
-            });
-            if bad_tags {
-                c.remove(&"Tags".into());
+            // Tags is a list of strings: the elements that are not strings fail to
+            // decode, the others stay. CustomName is a text: another type drops it.
+            let kept_tags = match c.get(&"Tags".into()) {
+                Some(Tag::List(l)) => Some(
+                    l.iter()
+                        .filter(|e| matches!(e, Tag::String(_)))
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                ),
+                Some(_) => Some(Vec::new()),
+                None => None,
+            };
+            if let Some(kept) = kept_tags {
+                if kept.is_empty() {
+                    c.remove(&"Tags".into());
+                } else {
+                    c.insert("Tags".into(), Tag::List(kept));
+                }
             }
             let bad_name = c.get(&"CustomName".into()).is_some_and(|t| {
                 !matches!(t, Tag::String(_) | Tag::Compound(_) | Tag::List(_))
