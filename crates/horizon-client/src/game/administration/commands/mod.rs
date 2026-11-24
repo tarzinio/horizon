@@ -3735,18 +3735,15 @@ impl Game<'_> {
             None => self
                 .ui
                 .registries
-                .by_registry
-                .get("minecraft:worldgen/structure")
-                .is_some_and(|registry| registry.ids.iter().any(|id| id == structure)),
+                .ids("minecraft:worldgen/structure")
+                .iter()
+                .any(|id| id == structure),
         }
     }
     /// Whether the game's files or a world pack define the tag of `registry`.
     fn tag_exists(&self, registry: &str, tag: &str) -> bool {
         let (ns, path) = tag.split_once(':').unwrap_or(("minecraft", tag));
-        self.options
-            .resources
-            .join(format!("data/{ns}/tags/{registry}/{path}.json"))
-            .is_file()
+        self.tag_file(registry, ns, path).is_some_and(|f| f.is_file())
             || self
                 .fns
                 .store
@@ -3766,6 +3763,24 @@ impl Game<'_> {
     pub(super) fn structure_tag(&self, tag: &str) -> Vec<String> {
         self.tag_entries("worldgen/structure", tag)
     }
+    /// The game's file of tag `ns:path` of `registry`, or `None` when a part of
+    /// the id is no path segment vanilla would read (`FileUtil.isValidPathSegment`),
+    /// so a tag such as `#../..` never reaches outside the game's files.
+    fn tag_file(&self, registry: &str, ns: &str, path: &str) -> Option<std::path::PathBuf> {
+        let segment = |s: &str| {
+            !s.is_empty()
+                && s != "."
+                && s != ".."
+                && s.bytes().all(|b| {
+                    b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'.' | b'_')
+                })
+        };
+        (segment(ns) && path.split('/').all(segment)).then(|| {
+            self.options
+                .resources
+                .join(format!("data/{ns}/tags/{registry}/{path}.json"))
+        })
+    }
     /// The entries of a data pack tag of `registry`, nested tags expanded.
     pub(super) fn tag_entries(&self, registry: &str, tag: &str) -> Vec<String> {
         let mut out = Vec::new();
@@ -3776,10 +3791,7 @@ impl Game<'_> {
                 continue;
             }
             let (ns, path) = t.split_once(':').unwrap_or(("minecraft", &t));
-            let file = self
-                .options
-                .resources
-                .join(format!("data/{ns}/tags/{registry}/{path}.json"));
+            let file = self.tag_file(registry, ns, path);
             // The game's file and the world's packs' both count, entries
             // joined in resource-stack order; a pack file with `replace`
             // drops what the lower sources put in (`TagLoader.load`).
@@ -3791,8 +3803,8 @@ impl Game<'_> {
                 .into_iter()
                 .flatten()
                 .filter_map(|b| serde_json::from_slice::<serde_json::Value>(b).ok());
-            let parsed = std::fs::read(file)
-                .ok()
+            let parsed = file
+                .and_then(|f| std::fs::read(f).ok())
                 .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
                 .into_iter()
                 .chain(packed);
